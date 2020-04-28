@@ -8,6 +8,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	otlog "github.com/opentracing/opentracing-go/log"
+	"github.com/opentracing-contrib/go-stdlib/nethttp"
 	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
 )
 
@@ -15,7 +16,7 @@ func main() {
 	tracer, closer := tracing.Init("formatter")
 	defer closer.Close()
 
-	http.HandleFunc("/format", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/format", nethttp.MiddlewareFunc(tracer, func(w http.ResponseWriter, r *http.Request) {
 		//从HTTP请求Header中提取span.Context
 		spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
 		span := tracer.StartSpan("format", ext.RPCServerOption(spanCtx))
@@ -33,7 +34,7 @@ func main() {
 			otlog.String("value", helloStr),
 		)
 		w.Write([]byte(helloStr))
-	})
+	}))
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
 }
