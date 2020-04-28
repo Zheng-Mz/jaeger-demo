@@ -13,8 +13,12 @@ import (
 	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
 )
 
+/*The format parameter refers to one of the three standard encodings the OpenTracing API defines:
+  - TextMap where span context is encoded as a collection of string key-value pairs,
+  - Binary where span context is encoded as an opaque byte array,
+  - HTTPHeaders, which is similar to TextMap except that the keys must be safe to be used as HTTP headers.*/
 func main() {
-	if len(os.Args) != 2 {
+	if len(os.Args) != 2 && len(os.Args) != 3 {
 		panic("ERROR: Expecting one argument")
 	}
 
@@ -26,10 +30,15 @@ func main() {
 
 	span := tracer.StartSpan("say-hello")
 	span.SetTag("hello-to", helloTo)
+	//set Baggage
+	if len(os.Args) == 3 {
+		greeting := os.Args[2]
+		// after starting the span
+		span.SetBaggageItem("greeting", greeting)
+	}
 	defer span.Finish()
 
 	ctx := opentracing.ContextWithSpan(context.Background(), span)
-
 	helloStr := formatString(ctx, helloTo)
 	printHello(ctx, helloStr)
 }
@@ -49,6 +58,7 @@ func formatString(ctx context.Context, helloTo string) string {
 	ext.SpanKindRPCClient.Set(span)
 	ext.HTTPUrl.Set(span, url)
 	ext.HTTPMethod.Set(span, "GET")
+	//注入span.Context到HTTP请求Header中
 	span.Tracer().Inject(
 		span.Context(),
 		opentracing.HTTPHeaders,
@@ -85,6 +95,7 @@ func printHello(ctx context.Context, helloStr string) {
 	ext.SpanKindRPCClient.Set(span)
 	ext.HTTPUrl.Set(span, url)
 	ext.HTTPMethod.Set(span, "GET")
+	//注入span.Context到HTTP请求Header中
 	span.Tracer().Inject(span.Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(req.Header))
 
 	if _, err := xhttp.Do(req); err != nil {

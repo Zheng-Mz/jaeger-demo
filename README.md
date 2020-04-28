@@ -15,4 +15,5 @@ docker run -d --name jaeger -e COLLECTOR_ZIPKIN_HTTP_PORT=9411 -p 5775:5775/udp 
 go build -mod=vendor
 
 ## 参考
-https://github.com/yurishkuro/opentracing-tutorial/tree/master/go
+https://github.com/yurishkuro/opentracing-tutorial/tree/master/go \
+https://github.com/opentracing-contrib/go-stdlib

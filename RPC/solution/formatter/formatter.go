@@ -16,12 +16,18 @@ func main() {
 	defer closer.Close()
 
 	http.HandleFunc("/format", func(w http.ResponseWriter, r *http.Request) {
+		//从HTTP请求Header中提取span.Context
 		spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
 		span := tracer.StartSpan("format", ext.RPCServerOption(spanCtx))
 		defer span.Finish()
 
+		greeting := span.BaggageItem("greeting")
+		if greeting == "" {
+			greeting = "Hello"
+		}
+
 		helloTo := r.FormValue("helloTo")
-		helloStr := fmt.Sprintf("Hello, %s!", helloTo)
+		helloStr := fmt.Sprintf("%s, %s!", greeting, helloTo)
 		span.LogFields(
 			otlog.String("event", "string-format"),
 			otlog.String("value", helloStr),

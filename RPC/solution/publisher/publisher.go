@@ -14,6 +14,7 @@ func main() {
 	defer closer.Close()
 
 	http.HandleFunc("/publish", func(w http.ResponseWriter, r *http.Request) {
+		//从HTTP请求Header中提取span.Context
 		spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
 		span := tracer.StartSpan("publish", ext.RPCServerOption(spanCtx))
 		defer span.Finish()
