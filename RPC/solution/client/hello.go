@@ -45,9 +45,6 @@ func main() {
 }
 
 func formatString(ctx context.Context, helloTo string) string {
-	span, _ := opentracing.StartSpanFromContext(ctx, "formatString")
-	defer span.Finish()
-
 	v := url.Values{}
 	v.Set("helloTo", helloTo)
 	url := "http://localhost:8081/format?" + v.Encode()
@@ -55,7 +52,9 @@ func formatString(ctx context.Context, helloTo string) string {
 	if err != nil {
 		panic(err.Error())
 	}
-
+/*
+	span, _ := opentracing.StartSpanFromContext(ctx, "formatString")
+	defer span.Finish()
 	ext.SpanKindRPCClient.Set(span)
 	ext.HTTPUrl.Set(span, url)
 	ext.HTTPMethod.Set(span, "GET")
@@ -65,19 +64,23 @@ func formatString(ctx context.Context, helloTo string) string {
 		opentracing.HTTPHeaders,
 		opentracing.HTTPHeadersCarrier(req.Header),
 	)
+*/
+	req = req.WithContext(ctx)
+	req1, ht := nethttp.TraceRequest(opentracing.GlobalTracer(), req)
+	defer ht.Finish()
 
-	resp, err := xhttp.Do(req)
+	resp, err := xhttp.Do(req1)
 	if err != nil {
 		panic(err.Error())
 	}
 
 	helloStr := string(resp)
-
+/*
 	span.LogFields(
 		log.String("event", "string-format"),
 		log.String("value", helloStr),
 	)
-
+*/
 	return helloStr
 }
 
