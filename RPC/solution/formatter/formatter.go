@@ -2,39 +2,48 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
 	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/ext"
-	otlog "github.com/opentracing/opentracing-go/log"
 	"github.com/opentracing-contrib/go-stdlib/nethttp"
-	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
+
+	jaeger "github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/config"
 )
 
 func main() {
-	tracer, closer := tracing.Init("formatter")
+	tracer, closer, err := jaegerInit("formatServer", "")
+	if err != nil {
+		panic(err)
+	}
 	defer closer.Close()
 
-	http.HandleFunc("/format", nethttp.MiddlewareFunc(tracer, func(w http.ResponseWriter, r *http.Request) {
-		//从HTTP请求Header中提取span.Context
-		spanCtx, _ := tracer.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
-		span := tracer.StartSpan("format", ext.RPCServerOption(spanCtx))
-		defer span.Finish()
-
-		greeting := span.BaggageItem("greeting")
-		if greeting == "" {
-			greeting = "Hello"
-		}
-
+	op := nethttp.MWComponentName("format")
+	http.HandleFunc("/format", nethttp.MiddlewareFunc(tracer, func(w http.ResponseWriter, r *http.Request, ) {
 		helloTo := r.FormValue("helloTo")
-		helloStr := fmt.Sprintf("%s, %s!", greeting, helloTo)
-		span.LogFields(
-			otlog.String("event", "string-format"),
-			otlog.String("value", helloStr),
-		)
+		helloStr := fmt.Sprintf("Holle, %s!", helloTo)
 		w.Write([]byte(helloStr))
-	}))
+	}, op))
 
 	log.Fatal(http.ListenAndServe(":8081", nil))
+}
+
+func jaegerInit(service string, host string) (opentracing.Tracer, io.Closer, error) {
+	cfg := &config.Configuration{
+		Sampler: &config.SamplerConfig{
+			Type:  "const",
+			Param: 1,
+		},
+		Reporter: &config.ReporterConfig{
+			LogSpans: true,
+			LocalAgentHostPort: host,
+		},
+	}
+	tracer, closer, err := cfg.New(service, config.Logger(jaeger.StdLogger))
+	if err != nil {
+		fmt.Printf("ERROR: cannot init Jaeger: %v\n", err)
+	}
+	return tracer, closer, err
 }

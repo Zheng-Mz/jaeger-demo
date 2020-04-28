@@ -2,40 +2,64 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
-//	"github.com/opentracing/opentracing-go/log"
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/opentracing-contrib/go-stdlib/nethttp"
-	"github.com/yurishkuro/opentracing-tutorial/go/lib/http"
-	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
+
+	jaeger "github.com/uber/jaeger-client-go"
+	"github.com/uber/jaeger-client-go/config"
 )
+
+func jaegerInit(service string, host string) (opentracing.Tracer, io.Closer, error) {
+	cfg := &config.Configuration{
+		Sampler: &config.SamplerConfig{
+			Type:  "const",
+			Param: 1,
+		},
+		Reporter: &config.ReporterConfig{
+			LogSpans: true,
+			LocalAgentHostPort: host,
+		},
+	}
+	tracer, closer, err := cfg.New(service, config.Logger(jaeger.StdLogger))
+	if err != nil {
+		fmt.Printf("ERROR: cannot init Jaeger: %v\n", err)
+	}
+	return tracer, closer, err
+}
 
 /*The format parameter refers to one of the three standard encodings the OpenTracing API defines:
   - TextMap where span context is encoded as a collection of string key-value pairs,
   - Binary where span context is encoded as an opaque byte array,
   - HTTPHeaders, which is similar to TextMap except that the keys must be safe to be used as HTTP headers.*/
 func main() {
-	if len(os.Args) != 2 && len(os.Args) != 3 {
-		panic("ERROR: Expecting one argument")
-	}
+	var service, baggage, helloTo string
+	flag.StringVar(&service, "s", "hello-world", "set jaeger server name.")
+	flag.StringVar(&helloTo, "t", "hello", "set jaeger server name.")
+	flag.StringVar(&baggage, "b", "", "set jaeger server name.")
+	flag.Parse()
+	fmt.Println("svc name: ", service)
 
-	tracer, closer := tracing.Init("hello-world")
+	tracer, closer, err := jaegerInit(service, "")
+	if err != nil {
+		panic(err)
+	}
 	defer closer.Close()
 	opentracing.SetGlobalTracer(tracer)
-
-	helloTo := os.Args[1]
 
 	span := tracer.StartSpan("say-hello")
 	span.SetTag("hello-to", helloTo)
 	//set Baggage
-	if len(os.Args) == 3 {
-		greeting := os.Args[2]
+	if baggage != "" {
 		// after starting the span
-		span.SetBaggageItem("greeting", greeting)
+		span.SetBaggageItem("greeting", baggage)
 	}
 	defer span.Finish()
 
@@ -52,35 +76,20 @@ func formatString(ctx context.Context, helloTo string) string {
 	if err != nil {
 		panic(err.Error())
 	}
-/*
-	span, _ := opentracing.StartSpanFromContext(ctx, "formatString")
-	defer span.Finish()
-	ext.SpanKindRPCClient.Set(span)
-	ext.HTTPUrl.Set(span, url)
-	ext.HTTPMethod.Set(span, "GET")
-	//注入span.Context到HTTP请求Header中
-	span.Tracer().Inject(
-		span.Context(),
-		opentracing.HTTPHeaders,
-		opentracing.HTTPHeadersCarrier(req.Header),
-	)
-*/
-	req = req.WithContext(ctx)
-	req1, ht := nethttp.TraceRequest(opentracing.GlobalTracer(), req)
+
+	op := nethttp.OperationName("formatClient")
+	req1, ht := nethttp.TraceRequest(opentracing.GlobalTracer(), req.WithContext(ctx), op)
 	defer ht.Finish()
 
-	resp, err := xhttp.Do(req1)
+	client := &http.Client{Transport: &nethttp.Transport{}}
+	resp, err := client.Do(req1)
 	if err != nil {
 		panic(err.Error())
 	}
+	resp.Body.Close()
 
-	helloStr := string(resp)
-/*
-	span.LogFields(
-		log.String("event", "string-format"),
-		log.String("value", helloStr),
-	)
-*/
+	helloStr := helloTo //string(resp)
+
 	return helloStr
 }
 
@@ -102,7 +111,13 @@ func printHello(ctx context.Context, helloStr string) {
 	//注入span.Context到HTTP请求Header中
 	span.Tracer().Inject(span.Context(), opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(req.Header))
 
-	if _, err := xhttp.Do(req); err != nil {
+	client := &http.Client{}
+	if _, err := client.Do(req); err != nil {
 		panic(err.Error())
 	}
+
+	span.LogFields(
+		log.String("event", "string-format"),
+		log.String("value", helloStr),
+	)
 }
