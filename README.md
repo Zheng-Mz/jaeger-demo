@@ -5,7 +5,7 @@
 https://www.jaegertracing.io/download/ 
    
 ### Note
-本地测试的话 建议直接运行./jaeger-all-in-one \
+本地测试的话 建议直接运行jaeger-all-in-one类型镜像
 如果是线上环境建议分开操作
 
 ## 启动jaeger容器
