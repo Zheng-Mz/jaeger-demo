@@ -14,6 +14,10 @@ https://www.jaegertracing.io/download/
 ## jaeger-demo编译
     go build -mod=vendor
 
+## 进入web界面查看tracing
+http://127.0.0.1:16686/
+
+
 ## 参考
 https://github.com/yurishkuro/opentracing-tutorial/tree/master/go \
 https://github.com/opentracing-contrib/go-stdlib
